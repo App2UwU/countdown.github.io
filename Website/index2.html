@@ -1,0 +1,581 @@
+<title>Countdown</title>
+<html lang="en" class=" -webkit-"><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head>
+
+  <meta charset="UTF-8">
+  <title>CodePen Demo</title>
+
+  <meta name="robots" content="noindex">
+
+  <link rel="shortcut icon" type="image/x-icon" href="https://cpwebassets.codepen.io/assets/favicon/favicon-aec34940fbc1a6e787974dcd360f2c6b63348d4b1f4e06c77743096d55480f33.ico">
+  <link rel="mask-icon" type="" href="https://cpwebassets.codepen.io/assets/favicon/logo-pin-8f3771b1072e3c38bd662872f6b673a722f4b3ca2421637d5596661b4e2132cc.svg" color="#111">
+  <link rel="canonical" href="https://codepen.io/kindofone/pen/DkhAz">
+
+  <style media="" data-href="https://fonts.googleapis.com/css?family=Aldrich">/* latin */
+@font-face {
+  font-family: 'Aldrich';
+  font-style: normal;
+  font-weight: 400;
+  src: url(https://fonts.gstatic.com/s/aldrich/v11/MCoTzAn-1s3IGyJMVacY3w.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+  
+<style media="" data-href="https://cdnjs.cloudflare.com/ajax/libs/normalize/5.0.0/normalize.min.css">button,hr,input{overflow:visible}audio,canvas,progress,video{display:inline-block}progress,sub,sup{vertical-align:baseline}html{font-family:sans-serif;line-height:1.15;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%}body{margin:0} menu,article,aside,details,footer,header,nav,section{display:block}h1{font-size:2em;margin:.67em 0}figcaption,figure,main{display:block}figure{margin:1em 40px}hr{box-sizing:content-box;height:0}code,kbd,pre,samp{font-family:monospace,monospace;font-size:1em}a{background-color:transparent;-webkit-text-decoration-skip:objects}a:active,a:hover{outline-width:0}abbr[title]{border-bottom:none;text-decoration:underline;text-decoration:underline dotted}b,strong{font-weight:bolder}dfn{font-style:italic}mark{background-color:#ff0;color:#000}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative}sub{bottom:-.25em}sup{top:-.5em}audio:not([controls]){display:none;height:0}img{border-style:none}svg:not(:root){overflow:hidden}button,input,optgroup,select,textarea{font-family:sans-serif;font-size:100%;line-height:1.15;margin:0}button,input{}button,select{text-transform:none}[type=submit], [type=reset],button,html [type=button]{-webkit-appearance:button}[type=button]::-moz-focus-inner,[type=reset]::-moz-focus-inner,[type=submit]::-moz-focus-inner,button::-moz-focus-inner{border-style:none;padding:0}[type=button]:-moz-focusring,[type=reset]:-moz-focusring,[type=submit]:-moz-focusring,button:-moz-focusring{outline:ButtonText dotted 1px}fieldset{border:1px solid silver;margin:0 2px;padding:.35em .625em .75em}legend{box-sizing:border-box;color:inherit;display:table;max-width:100%;padding:0;white-space:normal}progress{}textarea{overflow:auto}[type=checkbox],[type=radio]{box-sizing:border-box;padding:0}[type=number]::-webkit-inner-spin-button,[type=number]::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}[type=search]::-webkit-search-cancel-button,[type=search]::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}[hidden],template{display:none}/*# sourceMappingURL=normalize.min.css.map */</style>
+
+  <style class="INLINE_PEN_STYLESHEET_ID">
+    /* Play with speed and easing of the animation */
+/* =========================================== */
+.digit {
+  display: inline-block;
+  font-size: 200px;
+  color: rgba(0, 0, 0, 0.25);
+  height: 180px;
+  line-height: 1;
+}
+
+.time-part-wrapper {
+  display: inline-block;
+  margin-right: 50px;
+  position: relative;
+}
+.time-part-wrapper:not(:last-child):after {
+  content: ":";
+  display: block;
+  width: 30px;
+  height: 230px;
+  position: absolute;
+  top: 0px;
+  right: -30px;
+  color: rgba(0, 0, 0, 0.25);
+  font-size: 200px;
+  line-height: 0.9;
+}
+
+.time-part {
+  width: 140px;
+  text-align: center;
+  height: 180px;
+  overflow: hidden;
+  display: inline-block;
+  margin-left: -5px;
+  box-sizing: border-box;
+}
+.time-part .digit-wrapper {
+  animation-timing-function: cubic-bezier(1, 0, 1, 0);
+}
+.time-part.minutes.tens .digit-wrapper {
+  animation-name: minutes-tens;
+  animation-duration: 3600s;
+  animation-iteration-count: 1;
+}
+.time-part.minutes.ones .digit-wrapper {
+  animation-name: minutes-ones;
+  animation-duration: 600s;
+  animation-iteration-count: 6;
+}
+.time-part.seconds.tens .digit-wrapper {
+  animation-name: seconds-tens;
+  animation-duration: 60s;
+  animation-iteration-count: 60;
+}
+.time-part.seconds.ones .digit-wrapper {
+  animation-name: seconds-ones;
+  animation-duration: 10s;
+  animation-iteration-count: 360;
+}
+.time-part.hundredths.tens .digit-wrapper {
+  animation-name: hundredths-tens;
+  animation-duration: 1s;
+  animation-iteration-count: 3600;
+}
+.time-part.hundredths.ones .digit-wrapper {
+  animation-name: hundredths-ones;
+  animation-duration: 0.1s;
+  animation-iteration-count: 36000;
+}
+
+@keyframes minutes-tens {
+  0% {
+    transform: translateY(-180px);
+  }
+  16.66667% {
+    transform: translateY(-360px);
+  }
+  33.33333% {
+    transform: translateY(-540px);
+  }
+  50% {
+    transform: translateY(-720px);
+  }
+  66.66667% {
+    transform: translateY(-900px);
+  }
+  83.33333% {
+    transform: translateY(-1080px);
+  }
+}
+@keyframes minutes-ones {
+  0% {
+    transform: translateY(-180px);
+  }
+  10% {
+    transform: translateY(-360px);
+  }
+  20% {
+    transform: translateY(-540px);
+  }
+  30% {
+    transform: translateY(-720px);
+  }
+  40% {
+    transform: translateY(-900px);
+  }
+  50% {
+    transform: translateY(-1080px);
+  }
+  60% {
+    transform: translateY(-1260px);
+  }
+  70% {
+    transform: translateY(-1440px);
+  }
+  80% {
+    transform: translateY(-1620px);
+  }
+  90% {
+    transform: translateY(-1800px);
+  }
+}
+@keyframes seconds-tens {
+  0% {
+    transform: translateY(-180px);
+  }
+  16.66667% {
+    transform: translateY(-360px);
+  }
+  33.33333% {
+    transform: translateY(-540px);
+  }
+  50% {
+    transform: translateY(-720px);
+  }
+  66.66667% {
+    transform: translateY(-900px);
+  }
+  83.33333% {
+    transform: translateY(-1080px);
+  }
+}
+@keyframes seconds-ones {
+  0% {
+    transform: translateY(-180px);
+  }
+  10% {
+    transform: translateY(-360px);
+  }
+  20% {
+    transform: translateY(-540px);
+  }
+  30% {
+    transform: translateY(-720px);
+  }
+  40% {
+    transform: translateY(-900px);
+  }
+  50% {
+    transform: translateY(-1080px);
+  }
+  60% {
+    transform: translateY(-1260px);
+  }
+  70% {
+    transform: translateY(-1440px);
+  }
+  80% {
+    transform: translateY(-1620px);
+  }
+  90% {
+    transform: translateY(-1800px);
+  }
+}
+@keyframes hundredths-tens {
+  0% {
+    transform: translateY(-180px);
+  }
+  10% {
+    transform: translateY(-360px);
+  }
+  20% {
+    transform: translateY(-540px);
+  }
+  30% {
+    transform: translateY(-720px);
+  }
+  40% {
+    transform: translateY(-900px);
+  }
+  50% {
+    transform: translateY(-1080px);
+  }
+  60% {
+    transform: translateY(-1260px);
+  }
+  70% {
+    transform: translateY(-1440px);
+  }
+  80% {
+    transform: translateY(-1620px);
+  }
+  90% {
+    transform: translateY(-1800px);
+  }
+}
+@keyframes hundredths-ones {
+  0% {
+    transform: translateY(-180px);
+  }
+  10% {
+    transform: translateY(-360px);
+  }
+  20% {
+    transform: translateY(-540px);
+  }
+  30% {
+    transform: translateY(-720px);
+  }
+  40% {
+    transform: translateY(-900px);
+  }
+  50% {
+    transform: translateY(-1080px);
+  }
+  60% {
+    transform: translateY(-1260px);
+  }
+  70% {
+    transform: translateY(-1440px);
+  }
+  80% {
+    transform: translateY(-1620px);
+  }
+  90% {
+    transform: translateY(-1800px);
+  }
+}
+body {
+  background: #F1614B;
+  margin: 0;
+  font-family: "Aldrich";
+}
+
+.wrapper {
+  margin: 100px auto;
+  width: 1000px;
+  position: relative;
+}
+.wrapper:before, .wrapper:after {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 100%;
+  left: 0;
+  height: 20px;
+  z-index: 10;
+}
+.wrapper:before {
+  top: 0px;
+  background-image: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4gPHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkIiBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgeDE9IjAuNSIgeTE9IjAuMCIgeDI9IjAuNSIgeTI9IjEuMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2YxNjE0YiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2YxNjE0YiIgc3RvcC1vcGFjaXR5PSIwLjAiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyYWQpIiAvPjwvc3ZnPiA=');
+  background-size: 100%;
+  background-image: -webkit-gradient(linear, 50% 0%, 50% 100%, color-stop(0%, #f1614b), color-stop(100%, rgba(241, 97, 75, 0)));
+  background-image: -moz-linear-gradient(top, #f1614b 0%, rgba(241, 97, 75, 0) 100%);
+  background-image: -webkit-linear-gradient(top, #f1614b 0%, rgba(241, 97, 75, 0) 100%);
+  background-image: linear-gradient(to bottom, #f1614b 0%, rgba(241, 97, 75, 0) 100%);
+}
+.wrapper:after {
+  bottom: 0px;
+  background-image: url('data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4gPHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkIiBncmFkaWVudFVuaXRzPSJvYmplY3RCb3VuZGluZ0JveCIgeDE9IjAuNSIgeTE9IjAuMCIgeDI9IjAuNSIgeTI9IjEuMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2YxNjE0YiIgc3RvcC1vcGFjaXR5PSIwLjAiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNmMTYxNGIiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyYWQpIiAvPjwvc3ZnPiA=');
+  background-size: 100%;
+  background-image: -webkit-gradient(linear, 50% 0%, 50% 100%, color-stop(0%, rgba(241, 97, 75, 0)), color-stop(100%, #f1614b));
+  background-image: -moz-linear-gradient(top, rgba(241, 97, 75, 0) 0%, #f1614b 100%);
+  background-image: -webkit-linear-gradient(top, rgba(241, 97, 75, 0) 0%, #f1614b 100%);
+  background-image: linear-gradient(to bottom, rgba(241, 97, 75, 0) 0%, #f1614b 100%);
+}
+
+  </style>
+
+  
+<script src="https://cpwebassets.codepen.io/assets/editor/iframe/iframeConsoleRunner-d8236034cc3508e70b0763f2575a8bb5850f9aea541206ce56704c013047d712.js"></script>
+<script src="https://cpwebassets.codepen.io/assets/editor/iframe/iframeRefreshCSS-4793b73c6332f7f14a9b6bba5d5e62748e9d1bd0b5c52d7af6376f3d1c625d7e.js"></script>
+<script src="https://cpwebassets.codepen.io/assets/editor/iframe/iframeRuntimeErrors-4f205f2c14e769b448bcf477de2938c681660d5038bc464e3700256713ebe261.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prefixfree/1.0.7/prefixfree.min.js"></script>
+</head>
+
+<body>
+  <div class="wrapper">
+  <div class="time-part-wrapper">
+    <div class="time-part minutes tens">
+      <div class="digit-wrapper">
+        <span class="digit">0</span>
+        <span class="digit">5</span>
+        <span class="digit">4</span>
+        <span class="digit">3</span>
+        <span class="digit">2</span>
+        <span class="digit">1</span>
+        <span class="digit">0</span>
+      </div>
+    </div>
+    <div class="time-part minutes ones">
+      <div class="digit-wrapper">
+        <span class="digit">0</span>
+        <span class="digit">9</span>
+        <span class="digit">8</span>
+        <span class="digit">7</span>
+        <span class="digit">6</span>
+        <span class="digit">5</span>
+        <span class="digit">4</span>
+        <span class="digit">3</span>
+        <span class="digit">2</span>
+        <span class="digit">1</span>
+        <span class="digit">0</span>
+      </div>
+    </div>
+  </div>
+  <div class="time-part-wrapper">
+    <div class="time-part seconds tens">
+      <div class="digit-wrapper">
+        <span class="digit">0</span>
+        <span class="digit">5</span>
+        <span class="digit">4</span>
+        <span class="digit">3</span>
+        <span class="digit">2</span>
+        <span class="digit">1</span>
+        <span class="digit">0</span>
+      </div>
+    </div>
+    <div class="time-part seconds ones">
+      <div class="digit-wrapper">
+        <span class="digit">0</span>
+        <span class="digit">9</span>
+        <span class="digit">8</span>
+        <span class="digit">7</span>
+        <span class="digit">6</span>
+        <span class="digit">5</span>
+        <span class="digit">4</span>
+        <span class="digit">3</span>
+        <span class="digit">2</span>
+        <span class="digit">1</span>
+        <span class="digit">0</span>
+      </div>
+    </div>
+  </div>
+  <div class="time-part-wrapper">
+    <div class="time-part hundredths tens">
+      <div class="digit-wrapper">
+        <span class="digit">0</span>
+        <span class="digit">9</span>
+        <span class="digit">8</span>
+        <span class="digit">7</span>
+        <span class="digit">6</span>
+        <span class="digit">5</span>
+        <span class="digit">4</span>
+        <span class="digit">3</span>
+        <span class="digit">2</span>
+        <span class="digit">1</span>
+        <span class="digit">0</span>
+      </div>
+    </div>
+    <div class="time-part hundredths ones">
+      <div class="digit-wrapper">
+        <span class="digit">0</span>
+        <spa></spa>
+        <spa></spa>
+        <spa></spa>
+        <spa></spa>
+        <spa></spa>
+        <spa></spa>
+        <spa></spa>
+        <spa></spa>
+        <spa></spa>
+        <spa></spa>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+<script src="https://cpwebassets.codepen.io/assets/common/stopExecutionOnTimeout-1b93190375e9ccc259df3a57c1abc0e64599724ae30d7ea4c6877eb615f89387.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+  <script src="https://cdpn.io/cp/internal/boomboom/pen.js?key=pen.js-a6b3dfd9-3ca4-18cc-0110-92975614fa6d" crossorigin=""></script>
+
+
+</body></html>
